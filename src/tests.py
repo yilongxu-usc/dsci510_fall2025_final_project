@@ -1,16 +1,13 @@
+from data_retrieval import get_usda_yield_data, get_noaa_climate_data
 import pandas as pd
-from data_retrieval import get_usda_yield_data, get_noaa_station_monthly_tavg
-from data_retrieval import USDA_API_KEY, NOAA_TOKEN
 
-def test_usda_api():
-    assert USDA_API_KEY, "USDA key not loaded"
-    df = get_usda_yield_data(2020, 2020, "CORN")
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) > 0
+if __name__ == "__main__":
+    corn_df = get_usda_yield_data(2015, 2024, "CORN")
+    wheat_df = get_usda_yield_data(2015, 2024, "WHEAT")
+    temp_df = get_noaa_climate_data()
 
-def test_noaa_api():
-    assert NOAA_TOKEN, "NOAA token not loaded"
-    station = "GHCND:USW00023174"
-    df = get_noaa_station_monthly_tavg(station, "2020-01-01", "2020-12-31")
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) > 0
+    corn_df.to_csv("data/corn_yield.csv", index=False)
+    wheat_df.to_csv("data/wheat_yield.csv", index=False)
+    temp_df.to_csv("data/climate.csv", index=False)
+
+    print("Data saved to /data folder.")

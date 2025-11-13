@@ -62,7 +62,6 @@ def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
     """
 
     print("Fetching NOAA data...")
-    print("NOAA TOKEN LOADED:", NOAA_TOKEN)
 
     headers = {"token": NOAA_TOKEN}
 
@@ -77,7 +76,6 @@ def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
 
 
     response = requests.get(NOAA_ENDPOINT, headers=headers, params=params)
-    print("NOAA RAW RESPONSE:", response.text[:200])
     response.raise_for_status()
 
     results = response.json().get("results", [])

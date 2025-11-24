@@ -1,224 +1,296 @@
 """
-Analysis script for the Crop Shock project.
+Per-state analysis script for the Crop Shock project.
 
-- Loads climate (NOAA) and yield (USDA) data from /data
-- Aggregates climate to annual averages
-- Aggregates yields to national-level annual yields
-- Merges datasets and computes simple correlations
-- Saves basic plots into /results for use in the report and slides
+It performs:
+- Per-state annual climate aggregation (from multiple NOAA stations)
+- Per-state annual corn and wheat yield aggregation (from USDA)
+- Merges climate/yield per state
+- State-level regressions (avg_temp → yield)
+- State-level scatter/regression plots
+- Multi-state comparison time series
+- Correlation heatmap with value labels
+
+Outputs saved into /results.
 """
 
-from pathlib import Path
-
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from config import DATA_DIR, RESULTS_DIR
+import os
 
+# --------------------------
+# 1. Load Data
+# --------------------------
 
 def load_data():
-    """Load climate, corn, and wheat CSV files from the data directory."""
-    climate_path = DATA_DIR / "climate.csv"
-    corn_path = DATA_DIR / "corn_yield.csv"
-    wheat_path = DATA_DIR / "wheat_yield.csv"
+    climate = pd.read_csv(DATA_DIR / "climate.csv")
+    corn = pd.read_csv(DATA_DIR / "corn_yield.csv")
+    wheat = pd.read_csv(DATA_DIR / "wheat_yield.csv")
 
-    climate = pd.read_csv(climate_path)
-    corn = pd.read_csv(corn_path)
-    wheat = pd.read_csv(wheat_path)
-
-    print(f"Loaded climate data: {climate.shape[0]} rows")
-    print(f"Loaded corn yield data: {corn.shape[0]} rows")
-    print(f"Loaded wheat yield data: {wheat.shape[0]} rows")
+    print(f"Loaded climate rows: {climate.shape[0]}")
+    print(f"Loaded corn rows: {corn.shape[0]}")
+    print(f"Loaded wheat rows: {wheat.shape[0]}")
 
     return climate, corn, wheat
 
 
-def prepare_climate(climate: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convert monthly climate data to annual average temperature.
+# --------------------------
+# 2. Prepare Climate (Per-State)
+# --------------------------
 
-    Expects columns: 'date', 'value'.
-    Returns DataFrame with columns: 'year', 'avg_temp'.
+def prepare_climate(climate: pd.DataFrame):
     """
-    climate = climate.copy()
-    climate["date"] = pd.to_datetime(climate["date"])
-    climate["year"] = climate["date"].dt.year
+    Returns per-state annual climate:
+        year, state, avg_temp
+    """
+    df = climate.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df["year"] = df["date"].dt.year
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
 
-    annual = (
-        climate.groupby("year")["value"]
+    # Group: per-state annual temp
+    climate_state = (
+        df.groupby(["state", "year"])["value"]
         .mean()
         .reset_index()
         .rename(columns={"value": "avg_temp"})
     )
 
-    print("Prepared annual climate data:")
-    print(annual.head())
+    print("\nClimate (per-state) preview:")
+    print(climate_state.head())
 
-    return annual
+    return climate_state
 
 
-def prepare_corn(corn: pd.DataFrame) -> pd.DataFrame:
-    """
-    Prepare national-level annual corn yield.
+# --------------------------
+# 3. Prepare Crop Yields
+# --------------------------
 
-    Current corn_yield.csv mostly uses 'OTHER STATES'.
-    We treat it as one series and keep one row per year.
-    """
+US_STATES = {
+    "CALIFORNIA": "CA",
+    "UTAH": "UT",
+    "ILLINOIS": "IL",
+    "TEXAS": "TX",
+    "NEW YORK": "NY"
+}
+
+def prepare_corn(corn: pd.DataFrame):
     corn = corn.copy()
-    # If there are multiple rows per year, take the mean
-    annual_corn = (
-        corn.groupby("year")["CORN_yield"]
+    corn["state"] = corn["state_name"].str.upper().map(US_STATES)
+    annual = (
+        corn.groupby(["state", "year"])["CORN_yield"]
         .mean()
         .reset_index()
         .rename(columns={"CORN_yield": "corn_yield"})
     )
-
-    print("Prepared annual corn yield data:")
-    print(annual_corn.head())
-
-    return annual_corn
+    print("\nCorn annual per-state:")
+    print(annual.head())
+    return annual
 
 
-def prepare_wheat(wheat: pd.DataFrame) -> pd.DataFrame:
-    """
-    Prepare national-level annual wheat yield by averaging across states.
-
-    wheat_yield.csv has many states; we compute mean yield per year.
-    """
+def prepare_wheat(wheat: pd.DataFrame):
     wheat = wheat.copy()
-    annual_wheat = (
-        wheat.groupby("year")["WHEAT_yield"]
+    wheat["state"] = wheat["state_name"].str.upper().map(US_STATES)
+    annual = (
+        wheat.groupby(["state", "year"])["WHEAT_yield"]
         .mean()
         .reset_index()
         .rename(columns={"WHEAT_yield": "wheat_yield"})
     )
-
-    print("Prepared annual wheat yield data:")
-    print(annual_wheat.head())
-
-    return annual_wheat
+    print("\nWheat annual per-state:")
+    print(annual.head())
+    return annual
 
 
-def merge_datasets(climate_annual, corn_annual, wheat_annual):
-    """Merge climate with corn and wheat yields on 'year'."""
-    corn_merged = climate_annual.merge(corn_annual, on="year", how="inner")
-    wheat_merged = climate_annual.merge(wheat_annual, on="year", how="inner")
+# --------------------------
+# 4. Merge per-state climate & yields
+# --------------------------
 
-    print("Merged climate + corn data:")
-    print(corn_merged.head())
-
-    print("Merged climate + wheat data:")
-    print(wheat_merged.head())
-
-    return corn_merged, wheat_merged
+def merge_state_level(climate_state, corn_state, wheat_state):
+    corn_merge = climate_state.merge(corn_state, on=["state", "year"], how="inner")
+    wheat_merge = climate_state.merge(wheat_state, on=["state", "year"], how="inner")
+    return corn_merge, wheat_merge
 
 
-def plot_time_series(df, x_col, y_col, title, filename, ylabel=None):
-    """Save a simple time-series plot to the results directory."""
+# --------------------------
+# 5. Plot utilities
+# --------------------------
+
+def plot_scatter(df, x, y, title, filename, xlabel=None, ylabel=None):
     plt.figure()
-    plt.plot(df[x_col], df[y_col], marker="o")
-    plt.xlabel(x_col)
-    plt.ylabel(ylabel if ylabel else y_col)
-    plt.title(title)
+    plt.scatter(df[x], df[y])
     plt.grid(True)
+    plt.title(title)
+    plt.xlabel(xlabel if xlabel else x)
+    plt.ylabel(ylabel if ylabel else y)
     plt.tight_layout()
-
-    out_path = RESULTS_DIR / filename
-    plt.savefig(out_path)
+    plt.savefig(RESULTS_DIR / filename)
     plt.close()
-    print(f"Saved plot: {out_path}")
+    print("Saved:", filename)
 
 
-def plot_scatter(df, x_col, y_col, title, filename, xlabel=None, ylabel=None):
-    """Save a simple scatter plot to the results directory."""
+def plot_regression(df, x, y, slope, intercept, title, filename):
+    xs = df[x].to_numpy()
+    order = np.argsort(xs)
+    xs_sorted = xs[order]
+    ys_fit = slope * xs_sorted + intercept
+
     plt.figure()
-    plt.scatter(df[x_col], df[y_col])
-    plt.xlabel(xlabel if xlabel else x_col)
-    plt.ylabel(ylabel if ylabel else y_col)
-    plt.title(title)
+    plt.scatter(df[x], df[y], label="Data")
+    plt.plot(xs_sorted, ys_fit, color="red", label="Fit")
     plt.grid(True)
+    plt.xlabel(x)
+    plt.ylabel(y)
+    plt.title(title)
+    plt.legend()
     plt.tight_layout()
-
-    out_path = RESULTS_DIR / filename
-    plt.savefig(out_path)
+    plt.savefig(RESULTS_DIR / filename)
     plt.close()
-    print(f"Saved plot: {out_path}")
+    print("Saved:", filename)
 
+
+def run_linear_regression(df, x, y):
+    xs = df[x].to_numpy(dtype=float)
+    ys = df[y].to_numpy(dtype=float)
+
+    if len(xs) < 2:
+        return np.nan, np.nan, np.nan
+
+    slope, intercept = np.polyfit(xs, ys, 1)
+    y_pred = slope * xs + intercept
+
+    ss_res = np.sum((ys - y_pred)**2)
+    ss_tot = np.sum((ys - np.mean(ys))**2)
+    r2 = 1 - ss_res / ss_tot if ss_tot != 0 else np.nan
+
+    return slope, intercept, r2
+
+
+def plot_correlation_heatmap(corr_df, filename):
+    plt.figure(figsize=(6, 5))
+    im = plt.imshow(corr_df.values, vmin=-1, vmax=1, cmap="coolwarm")
+    plt.colorbar(im)
+
+    ticks = range(len(corr_df.columns))
+    plt.xticks(ticks, corr_df.columns, rotation=45, ha="right")
+    plt.yticks(ticks, corr_df.columns)
+
+    # Add numeric labels
+    for i in range(len(corr_df.columns)):
+        for j in range(len(corr_df.columns)):
+            val = corr_df.values[i, j]
+            plt.text(j, i, f"{val:.2f}", ha="center", va="center", color="black", fontsize=10)
+
+    plt.title("Correlation Heatmap")
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / filename)
+    plt.close()
+    print("Saved:", filename)
+
+
+# --------------------------
+# 6. Run full per-state analysis
+# --------------------------
 
 def run_analysis():
-    """High-level analysis pipeline."""
     climate, corn, wheat = load_data()
 
-    climate_annual = prepare_climate(climate)
-    corn_annual = prepare_corn(corn)
-    wheat_annual = prepare_wheat(wheat)
+    # Climate per state
+    climate_state = prepare_climate(climate)
+    climate_state.to_csv(RESULTS_DIR / "climate_annual_by_state.csv", index=False)
 
-    corn_merged, wheat_merged = merge_datasets(
-        climate_annual, corn_annual, wheat_annual
+    # Corn + Wheat per state
+    corn_state = prepare_corn(corn)
+    wheat_state = prepare_wheat(wheat)
+
+    # Merge
+    corn_merge, wheat_merge = merge_state_level(climate_state, corn_state, wheat_state)
+    corn_merge.to_csv(RESULTS_DIR / "climate_corn_state_merged.csv", index=False)
+    wheat_merge.to_csv(RESULTS_DIR / "climate_wheat_state_merged.csv", index=False)
+
+    print("\nMerged corn data sample:")
+    print(corn_merge.head())
+
+    print("\nMerged wheat data sample:")
+    print(wheat_merge.head())
+
+    # ------------------------
+    # State-level regressions
+    # ------------------------
+    states = sorted(climate_state["state"].unique())
+
+    for st in states:
+        df_c = corn_merge[corn_merge["state"] == st]
+        df_w = wheat_merge[wheat_merge["state"] == st]
+
+        # CORN regression
+        if len(df_c) >= 3:
+            slope, intercept, r2 = run_linear_regression(df_c, "avg_temp", "corn_yield")
+            print(f"\nCorn regression ({st}): slope={slope:.3f}, R²={r2:.3f}")
+            plot_regression(
+                df_c, "avg_temp", "corn_yield",
+                slope, intercept,
+                f"{st}: Temp vs Corn Yield",
+                f"regression_corn_{st}.png"
+            )
+
+        # WHEAT regression
+        if len(df_w) >= 3:
+            slope, intercept, r2 = run_linear_regression(df_w, "avg_temp", "wheat_yield")
+            print(f"Wheat regression ({st}): slope={slope:.3f}, R²={r2:.3f}")
+            plot_regression(
+                df_w, "avg_temp", "wheat_yield",
+                slope, intercept,
+                f"{st}: Temp vs Wheat Yield",
+                f"regression_wheat_{st}.png"
+            )
+
+        # Scatterplots
+        if len(df_c) > 0:
+            plot_scatter(df_c, "avg_temp", "corn_yield",
+                         f"{st}: Temp vs Corn Yield",
+                         f"scatter_corn_{st}.png")
+
+        if len(df_w) > 0:
+            plot_scatter(df_w, "avg_temp", "wheat_yield",
+                         f"{st}: Temp vs Wheat Yield",
+                         f"scatter_wheat_{st}.png")
+
+    # ------------------------
+    # Multi-state comparison
+    # ------------------------
+    plt.figure(figsize=(10, 6))
+    for st in states:
+        df = climate_state[climate_state["state"] == st]
+        plt.plot(df["year"], df["avg_temp"], marker="o", label=st)
+    plt.title("Climate Trend by State (Avg Temp)")
+    plt.xlabel("Year")
+    plt.ylabel("Avg Temp (°C)")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / "climate_trend_all_states.png")
+    plt.close()
+    print("Saved: climate_trend_all_states.png")
+
+    # ------------------------
+    # Combined correlation heatmap
+    # ------------------------
+    combined = (
+        corn_merge[["year", "state", "avg_temp", "corn_yield"]]
+        .merge(
+            wheat_merge[["year", "state", "avg_temp", "wheat_yield"]],
+            on=["year", "state", "avg_temp"],
+            how="inner"
+        )
     )
 
-    # Save merged datasets for inspection
-    corn_merged.to_csv(RESULTS_DIR / "climate_corn_merged.csv", index=False)
-    wheat_merged.to_csv(RESULTS_DIR / "climate_wheat_merged.csv", index=False)
-    print("Saved merged CSV files to results directory.")
+    corr = combined[["avg_temp", "corn_yield", "wheat_yield"]].corr()
+    plot_correlation_heatmap(corr, "correlation_heatmap.png")
 
-    # Compute simple correlations
-    print("\nCorrelation (climate vs corn yield):")
-    print(corn_merged[["avg_temp", "corn_yield"]].corr())
-
-    print("\nCorrelation (climate vs wheat yield):")
-    print(wheat_merged[["avg_temp", "wheat_yield"]].corr())
-
-    # Time-series plots
-    plot_time_series(
-        climate_annual,
-        x_col="year",
-        y_col="avg_temp",
-        title="Annual Average Temperature (LAX Station)",
-        filename="annual_avg_temp.png",
-        ylabel="Temperature (°C)",
-    )
-
-    plot_time_series(
-        corn_annual,
-        x_col="year",
-        y_col="corn_yield",
-        title="Annual Corn Yield (National Average)",
-        filename="annual_corn_yield.png",
-        ylabel="Corn yield (bushels per acre)",
-    )
-
-    plot_time_series(
-        wheat_annual,
-        x_col="year",
-        y_col="wheat_yield",
-        title="Annual Wheat Yield (National Average)",
-        filename="annual_wheat_yield.png",
-        ylabel="Wheat yield (bushels per acre)",
-    )
-
-    # Scatter plots: temperature vs yield
-    plot_scatter(
-        corn_merged,
-        x_col="avg_temp",
-        y_col="corn_yield",
-        title="Average Temperature vs Corn Yield",
-        filename="temp_vs_corn_yield.png",
-        xlabel="Average temperature (°C)",
-        ylabel="Corn yield (bushels per acre)",
-    )
-
-    plot_scatter(
-        wheat_merged,
-        x_col="avg_temp",
-        y_col="wheat_yield",
-        title="Average Temperature vs Wheat Yield",
-        filename="temp_vs_wheat_yield.png",
-        xlabel="Average temperature (°C)",
-        ylabel="Wheat yield (bushels per acre)",
-    )
-
-    print("\nAnalysis finished. Check the 'results' folder for plots and merged CSVs.")
+    print("\nAnalysis complete! Check /results for all outputs.")
 
 
 if __name__ == "__main__":

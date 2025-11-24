@@ -59,8 +59,8 @@ def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
     "datasetid": "GSOM",
     "datatypeid": "TAVG",
     "stationid": "GHCND:USW00023174",  # LAX Airport
-    "startdate": "2010-01-01",
-    "enddate": "2010-12-31",
+    "startdate": "2015-01-01",
+    "enddate": "2024-12-31",
     "limit": 1000
     }
 

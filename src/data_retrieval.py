@@ -12,7 +12,7 @@ from config import (
     )
 
 
-def get_usda_yield_data(year_start=2015, year_end=2024, crop="CORN"):
+def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
     """
     Fetch crop yield data (corn/wheat) by state from USDA NASS API.
     Returns a pandas DataFrame.
@@ -55,18 +55,19 @@ def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
 
     headers = {"token": NOAA_TOKEN}
 
-    # Recommended stations across U.S.
+    # Selected stations across US
     stations = {
-        "LAX_CA": "GHCND:USW00023174",      # Los Angeles
-        "SLC_UT": "GHCND:USW00024127",      # Salt Lake City
-        "ORD_IL": "GHCND:USW00094846",      # Chicago
-        "DFW_TX": "GHCND:USW00003927",      # Dallas–Fort Worth
-        "JFK_NY": "GHCND:USW00094789",      # New York
+    "CA": ("LAX_CA", "GHCND:USW00023174"),      # California
+    "UT": ("SLC_UT", "GHCND:USW00024127"),      # Utah
+    "IL": ("ORD_IL", "GHCND:USW00094846"),      # Illinois
+    "TX": ("DFW_TX", "GHCND:USW00003927"),      # Texas
+    "NY": ("JFK_NY", "GHCND:USW00094789"),      # New York
     }
+
 
     all_results = []
 
-    for name, station_id in stations.items():
+    for name, (label, station_id) in stations.items():
         print(f"  Fetching station {station_id} ({name})...")
 
         params = {
@@ -84,7 +85,8 @@ def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
             station_results = response.json().get("results", [])
 
             for r in station_results:
-                r["station_name"] = name
+                r["station_name"] = label
+                r["state"] = name
 
             print(f"    Retrieved {len(station_results)} records")
 

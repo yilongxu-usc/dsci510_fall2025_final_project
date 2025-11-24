@@ -2,19 +2,15 @@
 Data retrieval functions for the Crop Shock project.
 Fetches crop yield and climate data from USDA and NOAA APIs.
 """
-
-import os
 import requests
 import pandas as pd
-from dotenv import load_dotenv
+from config import (
+    USDA_API_KEY,
+    NOAA_TOKEN,
+    USDA_ENDPOINT,
+    NOAA_ENDPOINT
+    )
 
-load_dotenv()
-
-# -------------------------------
-# USDA NASS API CONFIG
-# -------------------------------
-USDA_API_KEY = os.getenv("USDA_API_KEY")  # store your key in .env (never commit it)
-USDA_ENDPOINT = "https://quickstats.nass.usda.gov/api/api_GET/"
 
 def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
     """
@@ -46,12 +42,6 @@ def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
         df.rename(columns={"Value": f"{crop}_yield"}, inplace=True)
     return df
 
-
-# -------------------------------
-# NOAA API CONFIG
-# -------------------------------
-NOAA_TOKEN = os.getenv("NOAA_TOKEN")
-NOAA_ENDPOINT = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
 
 def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
                           start="2010-01-01", end="2024-12-31",

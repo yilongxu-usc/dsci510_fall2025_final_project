@@ -12,7 +12,7 @@ from config import (
     )
 
 
-def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
+def get_usda_yield_data(year_start=2015, year_end=2024, crop="CORN"):
     """
     Fetch crop yield data (corn/wheat) by state from USDA NASS API.
     Returns a pandas DataFrame.
@@ -44,30 +44,55 @@ def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
 
 
 def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
-                          start="2010-01-01", end="2024-12-31",
-                          location="FIPS:06"):
+                          start="2015-01-01", end="2024-12-31"):
     """
-    Fetch average temperature data from NOAA API.
-    You MUST provide a valid locationid (state FIPS, climate division, or station ID).
+    Fetch average monthly temperature from multiple NOAA stations.
+    Returns a combined DataFrame with columns:
+        date, station, value
     """
 
-    print("Fetching NOAA data...")
+    print("Fetching NOAA data from multiple stations...")
 
     headers = {"token": NOAA_TOKEN}
 
-    params = {
-    "datasetid": "GSOM",
-    "datatypeid": "TAVG",
-    "stationid": "GHCND:USW00023174",  # LAX Airport
-    "startdate": "2015-01-01",
-    "enddate": "2024-12-31",
-    "limit": 1000
+    # Recommended stations across U.S.
+    stations = {
+        "LAX_CA": "GHCND:USW00023174",      # Los Angeles
+        "SLC_UT": "GHCND:USW00024127",      # Salt Lake City
+        "ORD_IL": "GHCND:USW00094846",      # Chicago
+        "DFW_TX": "GHCND:USW00003927",      # Dallas–Fort Worth
+        "JFK_NY": "GHCND:USW00094789",      # New York
     }
 
+    all_results = []
 
-    response = requests.get(NOAA_ENDPOINT, headers=headers, params=params)
-    response.raise_for_status()
+    for name, station_id in stations.items():
+        print(f"  Fetching station {station_id} ({name})...")
 
-    results = response.json().get("results", [])
-    print(f"Retrieved {len(results)} climate records")
-    return pd.DataFrame(results)
+        params = {
+            "datasetid": dataset,
+            "datatypeid": datatype,
+            "stationid": station_id,
+            "startdate": start,
+            "enddate": end,
+            "limit": 1000
+        }
+
+        try:
+            response = requests.get(NOAA_ENDPOINT, headers=headers, params=params)
+            response.raise_for_status()
+            station_results = response.json().get("results", [])
+
+            for r in station_results:
+                r["station_name"] = name
+
+            print(f"    Retrieved {len(station_results)} records")
+
+            all_results.extend(station_results)
+
+        except requests.exceptions.HTTPError as e:
+            print(f"    WARNING: Station {station_id} failed: {e}")
+
+    print(f"Total combined NOAA records: {len(all_results)}")
+
+    return pd.DataFrame(all_results)

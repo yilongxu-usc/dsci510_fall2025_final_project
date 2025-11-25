@@ -19,7 +19,8 @@ NOAA_TOKEN = os.getenv("NOAA_TOKEN")
 # ----------------------------------------------
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
-
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ----------------------------------------------
 # # API endpoints

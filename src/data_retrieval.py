@@ -43,7 +43,7 @@ def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
     return df
 
 
-def get_noaa_climate_data(dataset="GSOM", datatype="TAVG",
+def get_noaa_climate_data(dataset="GSOM", datatype=["TAVG","PRCP"],
                           start="2015-01-01", end="2024-12-31"):
     """
     Fetch average monthly temperature from multiple NOAA stations.

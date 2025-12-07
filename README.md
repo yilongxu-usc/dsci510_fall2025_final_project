@@ -1,51 +1,51 @@
-# dsci510_fall2025_final_project
+# dsc510_fall2025_final_project
 
-This project explores the relationship between climate change and U.S. agricultural production, focusing on how temperature trends influence yearly corn and wheat yield across U.S. states. The analysis uses USDA crop yield data and NOAA climate data to build a dataset that will later be used for correlation and statistical exploration.
+**Climate–Yield Analysis of U.S. Corn and Wheat (1970–2024)**
 
-# Data sources
-1. USDA National Agricultural Statistics Service (NASS)
-API: https://quickstats.nass.usda.gov/api
-Provides annual crop yield by state
-Variables used:
-Sector: CROPS
-Group: FIELD CROPS
-Commodity: CORN / WHEAT
-Statistic: YIELD (bushels per acre)
-Data range: 2010–2024
+This project analyzes how **temperature and precipitation trends relate to corn and wheat yields** across selected U.S. states from **1970 to 2024**. It integrates **USDA crop yield data** with **NOAA climate records** and performs trend analysis, regressions, and correlation analysis at the **state level**.
 
-2. NOAA Climate Data Online (CDO)
-API: https://www.ncei.noaa.gov/cdo-web/api/v2
-Provides monthly average temperature (TAVG)
-Dataset: GSOM (Global Summary of the Month)
-Station used in early testing:
-GHCND:USW00023174 (LAX Airport)
-Data range: 2010–2024
+---
 
-Both datasets are obtained through API.
+## Key Questions
+- How do temperature and precipitation relate to corn and wheat yields?
+- Do climate–yield relationships differ by state?
+- Which climate variable appears more influential on crop yield?
 
-# Results 
-TRight now it does not include statistical analysis yet.
-At this stage, the project successfully:
-Retrieves corn and wheat yield data across all states from USDA,
-Retrieves monthly temperature data from NOAA via GSOM,
-Saves all data into the /data/ directory for later analysis.
-Further analysis (correlation, trends, modeling) will be completed in the final project submission.
+---
 
-# Installation
-Create a .env file in this format
-USDA_API_KEY=your_usda_api_key_here
-NOAA_TOKEN=your_noaa_api_token_here
+## Data Sources
+- **USDA NASS API** – Annual corn & wheat yields (bushels/acre) by state (1970–2024)
+- **NOAA CDO API (GSOM)** – Monthly average temperature (TAVG) and total precipitation (PRCP), aggregated to annual values
 
-pandas
-requests
-python-dotenvgit needs be installed for this project
+All data are retrieved programmatically via API.
 
-# Running analysis 
-To run the data retrieval and save output data:
+---
 
-From `src/` directory run:
+## How to Run
 
-`python main.py `
+This project is fully automated. From the project root:
 
-All obtained data will be stored in `data/` as csv files
-Output of further analysis will be stored in `results/`
+```bash
+python src/main.py
+```
+
+This single command will:
+- Download USDA and NOAA data
+- Process and merge datasets
+- Run all analyses
+- Generate plots and outputs
+
+Results are saved to the `results/` directory.
+
+---
+
+## Highlights
+- Long-term warming trends observed across all states
+- Precipitation shows strong year-to-year variability
+- Corn and wheat yields are strongly correlated with each other
+- Climate variables alone show weak linear relationships with yield, suggesting more complex drivers
+
+---
+
+**Author:** Yilong Xu (USC)  
+**Course:** DSCI 510 – Fall 2025

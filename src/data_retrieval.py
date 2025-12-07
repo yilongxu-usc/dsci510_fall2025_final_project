@@ -12,7 +12,7 @@ from config import (
     )
 
 
-def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
+def get_usda_yield_data(year_start=1970, year_end=2024, crop="CORN"):
     """
     Fetch crop yield data (corn/wheat) by state from USDA NASS API.
     Returns a pandas DataFrame.
@@ -43,58 +43,64 @@ def get_usda_yield_data(year_start=2010, year_end=2024, crop="CORN"):
     return df
 
 
-def get_noaa_climate_data(dataset="GSOM", datatype=["TAVG","PRCP"],
-                          start="2015-01-01", end="2024-12-31"):
+def get_noaa_climate_data(dataset="GSOM",datatype=["TAVG", "PRCP"],start_year=1970,end_year=2024):
     """
-    Fetch average monthly temperature from multiple NOAA stations.
-    Returns a combined DataFrame with columns:
-        date, station, value
+    Fetch NOAA climate data in small year chunks and combine results.
+    Final output spans start_year → end_year in a single DataFrame.
     """
 
-    print("Fetching NOAA data from multiple stations...")
-
+    print(f"Fetching NOAA climate data from {start_year} to {end_year}...")
     headers = {"token": NOAA_TOKEN}
 
-    # Selected stations across US
     stations = {
-    "CA": ("LAX_CA", "GHCND:USW00023174"),      # California
-    "UT": ("SLC_UT", "GHCND:USW00024127"),      # Utah
-    "IL": ("ORD_IL", "GHCND:USW00094846"),      # Illinois
-    "TX": ("DFW_TX", "GHCND:USW00003927"),      # Texas
-    "NY": ("JFK_NY", "GHCND:USW00094789"),      # New York
+        "CA": ("LAX_CA", "GHCND:USW00023174"),
+        "UT": ("SLC_UT", "GHCND:USW00024127"),
+        "IL": ("ORD_IL", "GHCND:USW00094846"),
+        "TX": ("DFW_TX", "GHCND:USW00003927"),
+        "NY": ("JFK_NY", "GHCND:USW00094789"),
     }
-
 
     all_results = []
 
-    for name, (label, station_id) in stations.items():
-        print(f"  Fetching station {station_id} ({name})...")
+    # --- loop over 2-year chunks ---
+    for year in range(start_year, end_year + 1, 2):
+        start_date = f"{year}-01-01"
+        end_date = f"{min(year + 1, end_year)}-12-31"
 
-        params = {
-            "datasetid": dataset,
-            "datatypeid": datatype,
-            "stationid": station_id,
-            "startdate": start,
-            "enddate": end,
-            "limit": 1000
-        }
+        print(f"\nRequesting period: {start_date} → {end_date}")
 
-        try:
-            response = requests.get(NOAA_ENDPOINT, headers=headers, params=params)
-            response.raise_for_status()
-            station_results = response.json().get("results", [])
+        for state, (label, station_id) in stations.items():
+            print(f"  Station {station_id} ({state})")
 
-            for r in station_results:
-                r["station_name"] = label
-                r["state"] = name
+            params = {
+                "datasetid": dataset,
+                "datatypeid": datatype,
+                "stationid": station_id,
+                "startdate": start_date,
+                "enddate": end_date,
+                "limit": 1000
+            }
 
-            print(f"    Retrieved {len(station_results)} records")
+            try:
+                response = requests.get(
+                    NOAA_ENDPOINT,
+                    headers=headers,
+                    params=params,
+                    timeout=30
+                )
+                response.raise_for_status()
+                results = response.json().get("results", [])
 
-            all_results.extend(station_results)
+                for r in results:
+                    r["station_name"] = label
+                    r["state"] = state
 
-        except requests.exceptions.HTTPError as e:
-            print(f"    WARNING: Station {station_id} failed: {e}")
+                print(f"    Retrieved {len(results)} records")
+                all_results.extend(results)
 
-    print(f"Total combined NOAA records: {len(all_results)}")
+            except requests.exceptions.RequestException as e:
+                print(f"    WARNING: Failed for {station_id}: {e}")
 
+    print(f"\nTotal NOAA records collected: {len(all_results)}")
     return pd.DataFrame(all_results)
+

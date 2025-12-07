@@ -12,7 +12,7 @@ Outputs:
 - Regressions: temp→yield, precip→yield
 - Scatterplots
 - Multi-state temperature & precipitation trend
-- Correlation heatmap (now 3×3 or 4×4 depending on variables)
+- Correlation heatmap (now 3x3 or 4x4 depending on variables)
 """
 
 import numpy as np
